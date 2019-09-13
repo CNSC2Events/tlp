@@ -5,4 +5,5 @@ go 1.13
 require (
 	github.com/PuerkitoBio/goquery v1.5.0
 	github.com/rs/zerolog v1.15.0
+	github.com/tidwall/pretty v1.0.0
 )

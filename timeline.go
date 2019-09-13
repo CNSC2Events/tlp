@@ -64,13 +64,18 @@ type TimelineParser struct {
 	Timezone *time.Location
 	RevID    string
 	Events   []*Event
+
+	now time.Time
 }
 
 type Option func(*TimelineParser) *TimelineParser
 
 func NewTimelineParser(respBody []byte, opts ...Option) *TimelineParser {
 
-	tp := &TimelineParser{body: respBody}
+	tp := &TimelineParser{
+		body: respBody,
+		now:  time.Now(),
+	}
 
 	for _, opt := range opts {
 		tp = opt(tp)
@@ -84,11 +89,14 @@ func NewTimelineParserFromReader(r io.Reader, opts ...Option) (*TimelineParser, 
 	if err != nil {
 		return nil, err
 	}
-	tp := &TimelineParser{body: body}
-	for _, opt := range opts {
-		tp = opt(tp)
+	tlMatches := new(TLMatchPage)
+
+	if err := json.Unmarshal(body, tlMatches); err != nil {
+		return nil, err
 	}
-	return tp, nil
+	return NewTimelineParser(
+		[]byte(tlMatches.Parse.Text.RawHTML),
+		opts...), nil
 }
 
 func (tp *TimelineParser) SetTimezone(name string) error {
@@ -101,40 +109,54 @@ func (tp *TimelineParser) SetTimezone(name string) error {
 }
 
 func (tp *TimelineParser) getCountDownDuration(s *goquery.Selection) (time.Duration, error) {
-	t, err := time.Parse(timeFmt, s.Find(`.timer-object-countdown-only`).Text())
+	t, err := tp.getCurrentTiming(s)
 	if err != nil {
-		return 0, fmt.Errorf("parser: isOnGoing: %w", err)
+		return 0, err
 	}
 	if tp.Timezone == nil {
 		if err := tp.SetTimezone("Asia/Shanghai"); err != nil {
 			return 0, fmt.Errorf("parser: isOnGoing: %w", err)
 		}
 	}
-	countDown := time.Until(t.In(tp.Timezone))
+
+	countDown := tp.now.Sub(t.In(tp.Timezone))
 	return countDown, nil
 }
 
+func (tp *TimelineParser) getCurrentTiming(s *goquery.Selection) (time.Time, error) {
+
+	t, err := time.Parse(timeFmt, s.Find(`.timer-object-countdown-only`).Text())
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parser: isOnGoing: %w", err)
+	}
+
+	return t, nil
+}
+
 func (tp *TimelineParser) Parse() error {
-	doc, err := goquery.NewDocumentFromReader(bytes.NewBufferString(string(tp.body)))
+	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(tp.body))
 	if err != nil {
 		return err
 	}
 	doc.Find(`.infobox_matches_content`).
 		Each(func(idx int, s *goquery.Selection) {
 			e := new(Event)
+			ct, err := tp.getCurrentTiming(s)
+			if err != nil {
+				log.Debug().Err(err)
+				return
+			}
+			e.StartAt = ct
 			e.buildVS(s)
-
 			countdown, err := tp.getCountDownDuration(s)
 			if err != nil {
 				log.Debug().Err(err)
 				return
 			}
-
 			if 0 < int64(countdown) && int64(countdown) < int64(MaxCountDuration) {
 				e.buildSeriesByTag(s, ".matchticker-tournament-wrapper")
 				e.TimeCountingDown = countdown.String()
 				tp.Events = append(tp.Events, e)
-				return
 			}
 
 			if int64(countdown) <= 0 {
@@ -144,6 +166,7 @@ func (tp *TimelineParser) Parse() error {
 					tp.Events = append(tp.Events, e)
 					return
 				}
+				tp.Events = append(tp.Events, e)
 			}
 
 			return
@@ -204,8 +227,8 @@ func (e *Event) buildVS(s *goquery.Selection) {
 	vs := strings.Replace(versus, "\n", "", -1)
 	if strings.Contains(vs, "vs") {
 		e.VS = Versus{
-			P1: lp,
-			P2: rp,
+			P1: trimPlayer(lp),
+			P2: trimPlayer(rp),
 		}
 		return
 	}
@@ -226,4 +249,8 @@ func (e *Event) buildVS(s *goquery.Selection) {
 	}
 	e.VS = v
 	return
+}
+
+func trimPlayer(p string) string {
+	return strings.Replace(strings.TrimSpace(p), "\n", "", -1)
 }
