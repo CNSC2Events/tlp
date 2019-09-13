@@ -17,11 +17,18 @@ func TestFmtJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readfile: %q", err)
 	}
+	sh, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("set timezone: %q", err)
+	}
 	setNow := func(t *TimelineParser) *TimelineParser {
-		t.now = time.Date(2019, time.September, 13, 17, 0, 0, 0, time.Local)
+		t.now = time.Date(2019, time.September, 13, 17, 0, 0, 0, sh)
 		return t
 	}
-	r, err := NewTimelineParserFromReader(bytes.NewBuffer(f), Option(setNow))
+	r, err := NewTimelineParserFromReader(
+		bytes.NewBuffer(f),
+		Option(setNow),
+	)
 	if err != nil {
 		t.Fatalf("timeline: %q", err)
 	}
