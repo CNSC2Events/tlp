@@ -191,8 +191,11 @@ func (tp *TimelineParser) FmtJSON(opts ...Option) ([]byte, error) {
 
 func (e *Event) GetVersus() string {
 	vs := e.VS
-	return fmt.Sprintf("%s vs %s (%s:%s)",
-		vs.P1, vs.P2, vs.P1Score, vs.P2Score)
+	if vs.P1Score != "" && vs.P2Score != "" {
+		return fmt.Sprintf("%s vs %s (%s:%s)",
+			vs.P1, vs.P2, vs.P1Score, vs.P2Score)
+	}
+	return fmt.Sprintf("%s vs %s ", vs.P1, vs.P2)
 }
 
 func (e *Event) buildDetailURL(s *goquery.Selection) error {

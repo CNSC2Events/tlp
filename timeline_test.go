@@ -12,6 +12,29 @@ func init() {
 	EnableDebug()
 }
 
+func TestGetVersus(t *testing.T) {
+	e := &Event{
+		VS: Versus{
+			P1:      "scnace",
+			P2:      "Astral",
+			P1Score: "2",
+			P2Score: "1",
+		},
+	}
+	if e.GetVersus() != "scnace vs Astral (2:1)" {
+		t.Errorf("versus: test player has score failed")
+	}
+	e2 := &Event{
+		VS: Versus{
+			P1: "scnace",
+			P2: "Astral",
+		},
+	}
+	if e2.GetVersus() != "scnace vs Astral " {
+		t.Errorf("versus: test player dont have score failed")
+	}
+}
+
 func TestFmtJSON(t *testing.T) {
 	f, err := ioutil.ReadFile("testing/raw.json")
 	if err != nil {
